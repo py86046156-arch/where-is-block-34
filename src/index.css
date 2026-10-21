@@ -1,18 +1,63 @@
+@import "leaflet/dist/leaflet.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --bg-primary: #ffffff;
-    --text-primary: #0f172a;
-    --accent-orange: #f97316;
+    --bg-primary: #F8FAFC;
+    --surface-white: #FFFFFF;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --brand-primary: #635BFF;
+    --brand-hover: #5145E5;
+    --brand-light: #F3F0FF;
+    --border-color: #E8EAF2;
+    --success-green: #10B981;
+    --warm-orange: #F59E0B;
+    --error-red: #EF4444;
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased font-sans selection:bg-orange-100 selection:text-orange-900;
+    @apply bg-slate-50 text-slate-900 antialiased font-sans;
     min-height: 100vh;
+    background-color: #F8FAFC;
   }
+
+  ::selection {
+    background-color: #F3F0FF;
+    color: #23187F;
+  }
+}
+
+/* Glassmorphism System */
+.glass-panel {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+}
+
+.glass-pill {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(232, 234, 242, 0.95);
+}
+
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #E8EAF2;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  border-color: #C7BDFF;
+  box-shadow: 0 14px 30px -4px rgba(99, 91, 255, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
 }
 
 /* Accessibility: Large Text Mode */
@@ -48,9 +93,8 @@ body.high-contrast * {
 body.high-contrast .bg-white,
 body.high-contrast .bg-slate-50,
 body.high-contrast .bg-slate-100,
-body.high-contrast .bg-navy-900,
-body.high-contrast .bg-slate-800,
-body.high-contrast .bg-slate-900 {
+body.high-contrast .glass-panel,
+body.high-contrast .glass-card {
   background-color: #09090b !important;
   color: #ffffff !important;
 }
@@ -73,13 +117,25 @@ body.high-contrast .tag {
 /* Animated Walking Route Path */
 @keyframes dash {
   to {
-    stroke-dashoffset: -40;
+    stroke-dashoffset: -36;
   }
 }
 
 .route-dash {
   stroke-dasharray: 8 6;
-  animation: dash 1.2s linear infinite;
+  animation: dash 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-dash {
+    animation: none;
+  }
+  .animate-spin-slow,
+  .animate-fadeIn,
+  .pin-glow {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Pulse Glow for Pin */
@@ -89,8 +145,8 @@ body.high-contrast .tag {
     opacity: 1;
   }
   50% {
-    transform: scale(1.35);
-    opacity: 0.7;
+    transform: scale(1.25);
+    opacity: 0.8;
   }
 }
 
@@ -104,7 +160,7 @@ body.high-contrast .tag {
   to   { transform: rotate(360deg); }
 }
 .animate-spin-slow {
-  animation: spin-slow 8s linear infinite;
+  animation: spin-slow 12s linear infinite;
 }
 
 /* Fade-in for panels / drawers */
@@ -113,7 +169,23 @@ body.high-contrast .tag {
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn {
-  animation: fadeIn 0.25s ease-out forwards;
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Page Transition animation */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition-enter {
+  animation: pageEnter 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Global Keyboard Focus Rings */
@@ -122,7 +194,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid #635BFF;
   outline-offset: 2px;
 }
 
@@ -160,4 +232,57 @@ textarea:focus-visible {
   .page-break {
     page-break-before: always;
   }
+}
+
+/* Custom Leaflet Styling */
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+  background: #f8fafc;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid #E8EAF2;
+  border-radius: 18px;
+  box-shadow: 0 16px 32px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
+  padding: 0;
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  margin: 14px 16px;
+  line-height: 1.4;
+  color: #0F172A;
+}
+
+.leaflet-popup-tip-container {
+  display: none;
+}
+
+.leaflet-control-zoom {
+  display: none !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(8px);
+  font-size: 10px !important;
+  border-top-left-radius: 8px;
+  padding: 2px 6px !important;
+}
+
+.custom-geo-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.custom-geo-marker:hover {
+  transform: scale(1.15);
+  z-index: 1000 !important;
 }

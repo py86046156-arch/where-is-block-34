@@ -131,33 +131,33 @@ export default function VisitorHelpModal({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto animate-fadeIn">
+      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-[#E8EAF2] overflow-hidden my-8 flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="bg-navy-950 text-white p-5 flex items-center justify-between border-b border-navy-800">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-[#E8EAF2]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+            <div className="p-2 rounded-xl bg-[#F3F0FF] text-[#635BFF]">
               <HelpCircle className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-black tracking-widest text-orange-400 uppercase">
-                Campus Navigation Assistance
+              <span className="text-[10px] font-bold tracking-widest text-[#635BFF] uppercase">
+                Campus Navigation Guide
               </span>
-              <h3 className="text-lg font-extrabold text-white">
+              <h3 className="text-lg font-bold text-[#0F172A]">
                 Visitor Help, FAQs & Campus Guide
               </h3>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+            className="p-1.5 text-[#94A3B8] hover:text-[#0F172A] hover:bg-slate-100 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Sub-Tabs */}
-        <div className="flex items-center gap-1 p-2 bg-slate-100 border-b border-slate-200 overflow-x-auto">
+        <div className="flex items-center gap-1 p-2 bg-slate-50 border-b border-[#E8EAF2] overflow-x-auto">
           {[
             { id: 'faq', label: 'Frequently Asked Questions', icon: <Compass className="w-3.5 h-3.5" /> },
             { id: 'gates', label: 'Campus Gate Directory', icon: <DoorOpen className="w-3.5 h-3.5" /> },
@@ -167,10 +167,10 @@ export default function VisitorHelpModal({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
                 activeTab === tab.id
-                  ? 'bg-white text-navy-950 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#635BFF] shadow-xs border border-[#E8EAF2]'
+                  : 'text-[#64748B] hover:text-[#0F172A]'
               }`}
             >
               {tab.icon}
@@ -222,7 +222,7 @@ export default function VisitorHelpModal({
                       onSelectStartGate(g.id);
                       onClose();
                     }}
-                    className="px-3.5 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap self-start sm:self-auto"
+                    className="px-3.5 py-2 bg-[#635BFF] hover:bg-[#5145E5] text-white rounded-xl text-xs font-semibold shadow-xs flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap self-start sm:self-auto"
                   >
                     <span>Start from {g.name.split(' (')[0]}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -253,7 +253,7 @@ export default function VisitorHelpModal({
                       type="checkbox"
                       checked={!!checkedItems[idx]}
                       onChange={() => {}}
-                      className="w-4 h-4 text-orange-600 rounded mt-0.5"
+                      className="w-4 h-4 text-[#635BFF] rounded mt-0.5"
                     />
                     <span className="text-xs font-medium leading-relaxed">
                       {item}
@@ -287,9 +287,9 @@ export default function VisitorHelpModal({
                     </div>
                     <h5 className="font-bold text-xs text-slate-900">{contact.role}</h5>
                     <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-orange-500" /> {contact.location}
+                      <MapPin className="w-3 h-3 text-[#635BFF]" /> {contact.location}
                     </div>
-                    <div className="text-xs font-mono font-bold text-navy-950 pt-1">
+                    <div className="text-xs font-mono font-bold text-[#0F172A] pt-1">
                       {contact.contact}
                     </div>
                   </div>
@@ -300,13 +300,13 @@ export default function VisitorHelpModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <div className="p-4 bg-slate-50 border-t border-[#E8EAF2] flex items-center justify-between">
           <div className="text-[11px] text-slate-400">
-            P10 Campus Wayfinder • Visitor Support System
+            Campus Navigator • Visitor Support System
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold transition-colors shadow"
+            className="px-4 py-2 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors"
           >
             Close Guide
           </button>

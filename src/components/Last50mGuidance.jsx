@@ -48,16 +48,16 @@ export default function Last50mGuidance({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* Header Bar */}
-        <div className="bg-navy-950 text-white p-5 flex items-center justify-between border-b border-navy-800">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-[#E8EAF2]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30">
+            <div className="p-2 rounded-xl bg-[#F3F0FF] text-[#635BFF]">
               <Eye className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-orange-400 uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-[#635BFF] uppercase tracking-wider">
                 Final Approach Navigation
               </span>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <h3 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
                 Last-50-Metre Guidance
               </h3>
             </div>
@@ -65,7 +65,7 @@ export default function Last50mGuidance({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+            className="p-1.5 text-[#94A3B8] hover:text-[#0F172A] hover:bg-slate-100 rounded-xl transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -242,7 +242,7 @@ export default function Last50mGuidance({
               </button>
               <button
                 onClick={onClose}
-                className="px-5 py-2 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold shadow transition-colors"
+                className="px-5 py-2 bg-[#0F172A] hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow transition-colors"
               >
                 Back to Map
               </button>

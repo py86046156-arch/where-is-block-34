@@ -1,77 +1,78 @@
 import React from 'react';
-import { QrCode, MapPin, Navigation, DoorOpen } from 'lucide-react';
+import { Search, MapPin, Navigation, Compass } from 'lucide-react';
+import ScrollReveal from './ScrollReveal';
 
 const STEPS = [
   {
-    icon: <DoorOpen className="w-6 h-6 text-white" />,
-    bg: "bg-emerald-500",
     num: "01",
-    title: "Arrive at a Gate",
-    desc: "Enter through Gate 1 (GT Road), Gate 2, 3, or 4. Scan any physical QR waypoint sign posted at the entrance.",
+    title: "Search for a destination",
+    desc: "Type an academic block, lecture hall, gate, or faculty department into the smart search bar.",
+    icon: <Search className="w-4 h-4 text-[#635BFF]" />,
   },
   {
-    icon: <MapPin className="w-6 h-6 text-white" />,
-    bg: "bg-orange-500",
     num: "02",
-    title: "Search Your Destination",
-    desc: "Type the block number, room code (e.g. 34-205), landmark, or exam hall name into the search bar.",
+    title: "Select a building or landmark",
+    desc: "Choose from verified campus locations, entrance gates, or specific room numbers like 34-205.",
+    icon: <MapPin className="w-4 h-4 text-[#635BFF]" />,
   },
   {
-    icon: <Navigation className="w-6 h-6 text-white" />,
-    bg: "bg-sky-500",
     num: "03",
-    title: "Follow the Route",
-    desc: "The Dijkstra engine highlights the shortest corridor path with turn-by-turn direction cards and covered walkway options.",
+    title: "Calculate shortest walking route",
+    desc: "The Dijkstra routing engine computes the optimal pedestrian path with distance and time estimates.",
+    icon: <Navigation className="w-4 h-4 text-[#635BFF]" />,
   },
   {
-    icon: <QrCode className="w-6 h-6 text-white" />,
-    bg: "bg-purple-500",
     num: "04",
-    title: "Last-50m Indoor Guide",
-    desc: "At the building portico, tap 'Last 50 m' for lift/staircase selection, floor plan view, and door plaque confirmation.",
+    title: "Follow indoor guidance",
+    desc: "Follow the turn-by-turn timeline and switch to last-50m indoor elevator and door plaque assistance.",
+    icon: <Compass className="w-4 h-4 text-[#635BFF]" />,
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section className="w-full my-6">
-      <div className="mb-5 text-center">
-        <span className="inline-block px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wider mb-2">
+    <section className="w-full my-12 pt-4">
+      {/* Section Heading */}
+      <div className="mb-8 text-center max-w-xl mx-auto">
+        <span className="inline-block px-3 py-1 rounded-full bg-[#F3F0FF] text-[#635BFF] text-xs font-semibold uppercase tracking-wider mb-2">
           How It Works
         </span>
-        <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-          From Campus Gate to the Right Room in 4 Steps
+        <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0F172A]">
+          Intelligent navigation in four simple steps
         </h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-xl mx-auto">
-          No map reading required. Just search, follow, and arrive.{' '}
-          <span className="text-amber-600 font-medium">Demo data — update with verified LPU coordinates.</span>
+        <p className="text-xs sm:text-sm text-[#64748B] mt-1.5">
+          Designed for seamless campus wayfinding with zero learning curve.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {STEPS.map((step, i) => (
-          <div
-            key={i}
-            className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all p-5 flex flex-col gap-3 overflow-hidden"
-          >
-            {/* Step number watermark */}
-            <span className="absolute top-3 right-4 text-5xl font-black text-slate-100 select-none leading-none">
-              {step.num}
-            </span>
+      {/* 4 Steps Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {STEPS.map((step, idx) => (
+          <ScrollReveal key={step.num} direction="up" delay={idx * 60}>
+            <div
+              className="relative bg-white rounded-2xl border border-[#E8EAF2] p-5 shadow-sm hover:shadow-card-hover hover:border-[#C7BDFF] transition-all duration-200 flex flex-col justify-between h-full"
+            >
+              <div>
+                {/* Header: Number and Icon */}
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold font-mono text-[#635BFF] bg-[#F3F0FF] px-2 py-0.5 rounded-md">
+                    Step {step.num}
+                  </span>
+                  <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                    {step.icon}
+                  </div>
+                </div>
 
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${step.bg} shadow-sm`}>
-              {step.icon}
+                {/* Title & Desc */}
+                <h4 className="font-bold text-sm text-[#0F172A] leading-snug">
+                  {step.title}
+                </h4>
+                <p className="text-xs text-[#64748B] mt-1.5 leading-relaxed">
+                  {step.desc}
+                </p>
+              </div>
             </div>
-
-            <div>
-              <h4 className="font-extrabold text-sm text-slate-900 leading-snug">
-                {step.title}
-              </h4>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                {step.desc}
-              </p>
-            </div>
-          </div>
+          </ScrollReveal>
         ))}
       </div>
     </section>

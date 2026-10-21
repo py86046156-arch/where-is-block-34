@@ -1,37 +1,52 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+
+// Navigation & Layout Components
 import Navbar from './components/Navbar';
-import CampusMap from './components/CampusMap';
-import SearchBar from './components/SearchBar';
-import PopularDestinations from './components/PopularDestinations';
-import RoutePlanner from './components/RoutePlanner';
+import Footer from './components/Footer';
+
+// Pages
+import HomePage from './pages/HomePage';
+import MapPage from './pages/MapPage';
+import DestinationsPage from './pages/DestinationsPage';
+import DestinationDetailPage from './pages/DestinationDetailPage';
+import CommunityPage from './pages/CommunityPage';
+import CommunityPostDetailPage from './pages/CommunityPostDetailPage';
+import EventsPage from './pages/EventsPage';
+import HelpPage from './pages/HelpPage';
+import ProfilePage from './pages/ProfilePage';
+
+// Modals & Academic Showcase Modules
 import Last50mGuidance from './components/Last50mGuidance';
+import FavoritesModal from './components/FavoritesModal';
+import VisitorHelpModal from './components/VisitorHelpModal';
 import QRWayfinding from './components/QRWayfinding';
-import EventMode from './components/EventMode';
 import UsabilityTestLab from './components/UsabilityTestLab';
 import ResearchEmpathy from './components/ResearchEmpathy';
 import ProjectReport from './components/ProjectReport';
 import ProjectPresentation from './components/ProjectPresentation';
 import AdminManager from './components/AdminManager';
-import FavoritesModal from './components/FavoritesModal';
-import VisitorHelpModal from './components/VisitorHelpModal';
-import QuickActions from './components/QuickActions';
-import HowItWorks from './components/HowItWorks';
 
+// Dataset & Utilities
 import { 
   INITIAL_NODES, 
   INITIAL_EDGES, 
-  ROOMS_CATALOG
+  ROOMS_CATALOG 
 } from './data/campusData';
 
-import { findShortestPath, findAlternativeRoute } from './utils/dijkstra';
-import { 
-  Building2,
-  MapPin,
-  Clock,
-  ShieldCheck
-} from 'lucide-react';
+// Automatic Scroll-to-Top on Route Navigation
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // --- Persistent Campus Data ---
   const [nodes, setNodes] = useState(() => {
     const saved = localStorage.getItem('p10_campus_nodes');
@@ -48,29 +63,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : ROOMS_CATALOG;
   });
 
-  // --- Active View Navigation ---
-  // 'map' | 'events' | 'qr' | 'usability' | 'research' | 'report' | 'presentation' | 'admin'
-  const [currentView, setCurrentView] = useState('map');
-
-  // --- Navigation & Routing State ---
-  const [startNodeId, setStartNodeId] = useState('gate-1'); // Default start at Gate 1
-  const [destinationNodeId, setDestinationNodeId] = useState('block-34'); // Default hero destination: Block 34
-  const [selectedRoom, setSelectedRoom] = useState(null);
-  const [preferCovered, setPreferCovered] = useState(false);
-
-  // Calculated Routes
-  const [activeRoute, setActiveRoute] = useState(null);
-  const [alternativeRoute, setAlternativeRoute] = useState(null);
-
-  // --- Modals and Drawers ---
-  const [showLast50mModal, setShowLast50mModal] = useState(false);
-  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-
-  // --- Accessibility States ---
-  const [isHighContrast, setIsHighContrast] = useState(false);
-  const [isLargeText, setIsLargeText] = useState(false);
-
   // --- Favorites & Recent Searches ---
   const [favorites, setFavorites] = useState(() => {
     const saved = localStorage.getItem('p10_favorites');
@@ -82,10 +74,15 @@ export default function App() {
     return saved ? JSON.parse(saved) : ['Block 34', 'Gate 1', 'Room 34-205'];
   });
 
-  // --- Event Mode Notice ---
-  const [activeEventNotice, setActiveEventNotice] = useState(
-    "CAMPUS EXAM ADVISORY: Mid-Term Examination active in Block 34 & Block 32. External candidates report via Gate 1."
-  );
+  // --- Modals & Drawers ---
+  const [showLast50mModal, setShowLast50mModal] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [activeAcademicModule, setActiveAcademicModule] = useState(null); // 'report' | 'presentation' | 'usability' | 'qr' | 'research' | 'admin'
+
+  // --- Accessibility States ---
+  const [isHighContrast, setIsHighContrast] = useState(false);
+  const [isLargeText, setIsLargeText] = useState(false);
 
   // Synchronize localStorage
   useEffect(() => {
@@ -125,55 +122,7 @@ export default function App() {
     }
   }, [isLargeText]);
 
-  // Dijkstra Route Calculation Trigger
-  const handleCalculateRoute = useCallback(() => {
-    if (!startNodeId || !destinationNodeId) return;
-
-    const route = findShortestPath(nodes, edges, startNodeId, destinationNodeId, {
-      preferCovered,
-    });
-    setActiveRoute(route);
-
-    if (route && route.success && route.path.length > 2) {
-      const alt = findAlternativeRoute(nodes, edges, startNodeId, destinationNodeId, route.path);
-      setAlternativeRoute(alt);
-    } else {
-      setAlternativeRoute(null);
-    }
-  }, [startNodeId, destinationNodeId, nodes, edges, preferCovered]);
-
-  // Auto-calculate initial route on first load or selection changes
-  useEffect(() => {
-    if (startNodeId && destinationNodeId) {
-      handleCalculateRoute();
-    }
-  }, [startNodeId, destinationNodeId, preferCovered, handleCalculateRoute]);
-
-  const handleResetRoute = () => {
-    setStartNodeId('');
-    setDestinationNodeId('');
-    setSelectedRoom(null);
-    setActiveRoute(null);
-    setAlternativeRoute(null);
-  };
-
-  // Selection Handlers
-  const handleSelectDestination = (nodeId) => {
-    setDestinationNodeId(nodeId);
-    setCurrentView('map');
-  };
-
-  const handleSelectStart = (nodeId) => {
-    setStartNodeId(nodeId);
-    setCurrentView('map');
-  };
-
-  const handleSelectRoom = (roomObj) => {
-    setSelectedRoom(roomObj);
-    setDestinationNodeId(roomObj.blockId);
-    setCurrentView('map');
-  };
-
+  // Handlers
   const handleToggleFavorite = (id) => {
     setFavorites(prev => 
       prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
@@ -187,6 +136,11 @@ export default function App() {
     });
   };
 
+  const handleClearRecentSearches = () => {
+    setRecentSearches([]);
+    localStorage.removeItem('p10_recent_searches');
+  };
+
   // Reset to default dataset
   const handleResetToDefault = () => {
     setNodes(INITIAL_NODES);
@@ -195,261 +149,220 @@ export default function App() {
     localStorage.removeItem('p10_campus_nodes');
     localStorage.removeItem('p10_campus_edges');
     localStorage.removeItem('p10_campus_rooms');
-    setStartNodeId('gate-1');
-    setDestinationNodeId('block-34');
-    setSelectedRoom(null);
+    setFavorites(['block-34', 'room-34-205', 'gate-1']);
+    setRecentSearches(['Block 34', 'Gate 1', 'Room 34-205']);
+    alert("Reset successful: Campus dataset and preferences restored to university default.");
   };
 
-  // Event Selection Route Trigger
-  const handleSelectEventRoute = (eventObj) => {
-    if (eventObj.recommendedGate) {
-      setStartNodeId(eventObj.recommendedGate);
-    }
-    setDestinationNodeId(eventObj.primaryDestinationId);
-    if (eventObj.primaryRoomId) {
-      const rm = rooms.find(r => r.id === eventObj.primaryRoomId);
-      if (rm) setSelectedRoom(rm);
-    }
-    setCurrentView('map');
-  };
-
-  const destinationNode = useMemo(() => {
-    return nodes.find(n => n.id === destinationNodeId) || null;
-  }, [nodes, destinationNodeId]);
+  // Active target node for Last 50m guidance
+  const defaultHeroNode = nodes.find(n => n.id === 'block-34');
+  const defaultSeminarRoom = rooms.find(r => r.id === '34-205');
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 transition-colors">
-      {/* Top Universal Navbar */}
+    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A] antialiased selection:bg-[#F3F0FF] selection:text-[#23187F]">
+      <ScrollToTop />
+
+      {/* Shared Navigation Header */}
       <Navbar
-        currentView={currentView}
-        onSelectView={setCurrentView}
         favoritesCount={favorites.length}
         onOpenFavorites={() => setShowFavoritesModal(true)}
         onOpenHelp={() => setShowHelpModal(true)}
+        onSelectModule={(moduleId) => setActiveAcademicModule(moduleId)}
         isHighContrast={isHighContrast}
         onToggleHighContrast={() => setIsHighContrast(!isHighContrast)}
         isLargeText={isLargeText}
         onToggleLargeText={() => setIsLargeText(!isLargeText)}
       />
 
-      {/* Main Content Area Based on Active View */}
-      <main className="flex-1">
-        {currentView === 'map' && (
-          <div className="w-full">
-            {/* HERO SECTION WITH HEADLINE “Never Get Lost on Campus Again” */}
-            <section className="relative bg-gradient-to-b from-navy-950 via-slate-900 to-navy-900 text-white pt-10 pb-16 px-4 border-b border-navy-800 overflow-hidden">
-              {/* Background Ambient Glows */}
-              <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="absolute top-1/2 right-1/4 w-80 h-80 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Main Page Routing */}
+      {/* Main Page Content with Route-aware page transition */}
+      <main className="flex-1 flex flex-col relative overflow-hidden">
+        {activeAcademicModule ? (
+          /* ACADEMIC SHOWCASE OVERLAY VIEW */
+          <div className="w-full max-w-7xl mx-auto px-4 py-8 page-transition-enter">
+            <div className="mb-4 flex items-center justify-between pb-3 border-b border-[#E8EAF2]">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#635BFF]">
+                Academic Capstone Module: {activeAcademicModule.toUpperCase()}
+              </span>
+              <button
+                onClick={() => setActiveAcademicModule(null)}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#0F172A] rounded-xl text-xs font-semibold"
+              >
+                Close Module View & Return
+              </button>
+            </div>
 
-              <div className="relative max-w-5xl mx-auto text-center space-y-6">
-                {/* University Pill */}
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-xs font-bold text-orange-400 shadow-inner">
-                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
-                  <span>Lovely Professional University • Campus Wayfinding System</span>
-                </div>
-
-                {/* Primary Headline Requested by User */}
-                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.15]">
-                  Never Get Lost on Campus Again.
-                </h1>
-
-                {/* Subtitle */}
-                <p className="text-sm sm:text-base md:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed font-normal">
-                  Interactive pedestrian wayfinding, shortest-path corridor routing, and last-50m indoor room guidance for visitors, parents, students, and exam candidates.
-                </p>
-
-                {/* Prominent Universal Search Bar Inside Hero */}
-                <div className="pt-2 max-w-2xl mx-auto">
-                  <SearchBar
+            {activeAcademicModule === 'report' && <ProjectReport />}
+            {activeAcademicModule === 'presentation' && (
+              <ProjectPresentation onSwitchToMap={() => {
+                setActiveAcademicModule(null);
+                navigate('/map');
+              }} />
+            )}
+            {activeAcademicModule === 'usability' && (
+              <UsabilityTestLab
+                nodes={nodes}
+                onSelectRouteForTest={(startId, destId) => {
+                  setActiveAcademicModule(null);
+                  navigate(`/map?start=${startId}&dest=${destId}`);
+                }}
+              />
+            )}
+            {activeAcademicModule === 'qr' && (
+              <QRWayfinding
+                nodes={nodes}
+                onSetStartWaypoint={(id) => {
+                  setActiveAcademicModule(null);
+                  navigate(`/map?start=${id}`);
+                }}
+                onNavigateToBlock34={(startId) => {
+                  setActiveAcademicModule(null);
+                  navigate(`/map?start=${startId}&dest=block-34`);
+                }}
+              />
+            )}
+            {activeAcademicModule === 'research' && <ResearchEmpathy />}
+            {activeAcademicModule === 'admin' && (
+              <AdminManager
+                nodes={nodes}
+                edges={edges}
+                rooms={rooms}
+                onSaveNodes={setNodes}
+                onSaveEdges={setEdges}
+                onSaveRooms={setRooms}
+                onResetToDefault={handleResetToDefault}
+              />
+            )}
+          </div>
+        ) : (
+          <div key={location.pathname} className="flex-1 flex flex-col page-transition-enter">
+            <Routes>
+              {/* 1. Home Page: / */}
+              <Route 
+                path="/" 
+                element={
+                  <HomePage
                     nodes={nodes}
                     rooms={rooms}
-                    onSelectDestination={handleSelectDestination}
-                    onSelectStart={handleSelectStart}
-                    onSelectRoom={handleSelectRoom}
+                    edges={edges}
                     favorites={favorites}
                     onToggleFavorite={handleToggleFavorite}
                     recentSearches={recentSearches}
                     onAddRecentSearch={handleAddRecentSearch}
                   />
-                </div>
-
-                {/* Key Status Tickers */}
-                <div className="pt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs text-slate-300">
-                  <span className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-orange-400" />
-                    <strong>Hero Block:</strong> Block 34 (CSE & Deans)
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                    <strong>Primary Entry:</strong> Gate 1 (GT Road)
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-sky-400" />
-                    <strong>Avg. Walk:</strong> ~6 Minutes (~390m)
-                  </span>
-                  <span className="px-3 py-1 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-                    <strong>Navigation:</strong> Shaded Corridor Compatible
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* MAIN WORKSPACE CONTENT */}
-            <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-              {/* Quick Action Navigation Buttons */}
-              <QuickActions
-                onFindBlock={() => {
-                  setDestinationNodeId('block-34');
-                  window.scrollTo({ top: 480, behavior: 'smooth' });
-                }}
-                onFindRoom={() => {
-                  const sampleRoom = rooms.find(r => r.id === '34-205');
-                  if (sampleRoom) handleSelectRoom(sampleRoom);
-                  setShowLast50mModal(true);
-                }}
-                onFindExamHall={() => {
-                  setCurrentView('events');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                onFindGate={() => {
-                  setStartNodeId('gate-1');
-                  window.scrollTo({ top: 480, behavior: 'smooth' });
-                }}
-                onOpenHelp={() => setShowHelpModal(true)}
+                } 
               />
 
-              {/* Popular Destinations Chips */}
-              <PopularDestinations
-                rooms={rooms}
-                onSelectDestination={handleSelectDestination}
-                onSelectRoom={handleSelectRoom}
-              />
-
-              {/* Interactive Campus Map & Route Planner Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Left: Interactive Schematic Vector Map */}
-                <div className="lg:col-span-7 xl:col-span-8">
-                  <CampusMap
+              {/* 2. Explore Map: /map (Full-viewport Google Maps style interface) */}
+              <Route 
+                path="/map" 
+                element={
+                  <MapPage
                     nodes={nodes}
                     edges={edges}
-                    startNodeId={startNodeId}
-                    destinationNodeId={destinationNodeId}
-                    activeRoute={activeRoute}
-                    onSelectNode={(node) => {
-                      if (!startNodeId) {
-                        setStartNodeId(node.id);
-                      } else {
-                        setDestinationNodeId(node.id);
-                      }
-                    }}
-                    onSetStart={(id) => setStartNodeId(id)}
-                    onSetDestination={(id) => setDestinationNodeId(id)}
-                    selectedRoom={selectedRoom}
-                  />
-                </div>
-
-                {/* Right: Dijkstra Route Planner & Turn-by-Turn Card */}
-                <div className="lg:col-span-5 xl:col-span-4">
-                  <RoutePlanner
-                    nodes={nodes}
-                    edges={edges}
-                    startNodeId={startNodeId}
-                    destinationNodeId={destinationNodeId}
-                    onSetStart={setStartNodeId}
-                    onSetDestination={setDestinationNodeId}
-                    activeRoute={activeRoute}
-                    alternativeRoute={alternativeRoute}
-                    onCalculateRoute={handleCalculateRoute}
-                    onResetRoute={handleResetRoute}
+                    rooms={rooms}
                     onOpenLast50m={() => setShowLast50mModal(true)}
-                    selectedRoom={selectedRoom}
-                    preferCovered={preferCovered}
-                    onTogglePreferCovered={() => setPreferCovered(!preferCovered)}
+                    recentSearches={recentSearches}
+                    onAddRecentSearch={handleAddRecentSearch}
                   />
-                </div>
-              </div>
+                } 
+              />
 
-              {/* How Wayfinding Works Accordion */}
-              <HowItWorks />
-            </div>
+              {/* 3. Destinations: /destinations */}
+              <Route 
+                path="/destinations" 
+                element={
+                  <DestinationsPage
+                    nodes={nodes}
+                    favorites={favorites}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                } 
+              />
+
+              {/* 4. Destination Details: /destinations/:id */}
+              <Route 
+                path="/destinations/:id" 
+                element={
+                  <DestinationDetailPage
+                    nodes={nodes}
+                    rooms={rooms}
+                    favorites={favorites}
+                    onToggleFavorite={handleToggleFavorite}
+                    onOpenLast50m={() => setShowLast50mModal(true)}
+                  />
+                } 
+              />
+
+              {/* 5. Campus Community: /community */}
+              <Route 
+                path="/community" 
+                element={
+                  <CommunityPage nodes={nodes} />
+                } 
+              />
+
+              {/* 6. Community Post Details: /community/:postId */}
+              <Route 
+                path="/community/:postId" 
+                element={
+                  <CommunityPostDetailPage />
+                } 
+              />
+
+              {/* 7. Events: /events */}
+              <Route 
+                path="/events" 
+                element={
+                  <EventsPage />
+                } 
+              />
+
+              {/* 8. Help and FAQs: /help */}
+              <Route 
+                path="/help" 
+                element={
+                  <HelpPage />
+                } 
+              />
+
+              {/* 9. User Profile: /profile */}
+              <Route 
+                path="/profile" 
+                element={
+                  <ProfilePage
+                    nodes={nodes}
+                    rooms={rooms}
+                    favorites={favorites}
+                    onRemoveFavorite={handleToggleFavorite}
+                    recentSearches={recentSearches}
+                    onClearRecentSearches={handleClearRecentSearches}
+                    onResetToDefault={handleResetToDefault}
+                    isHighContrast={isHighContrast}
+                    onToggleHighContrast={() => setIsHighContrast(!isHighContrast)}
+                    isLargeText={isLargeText}
+                    onToggleLargeText={() => setIsLargeText(!isLargeText)}
+                  />
+                } 
+              />
+            </Routes>
           </div>
         )}
-
-        {/* EVENTS & EXAMS VIEW */}
-        {currentView === 'events' && (
-          <EventMode
-            onSelectEventRoute={handleSelectEventRoute}
-            activeEventNotice={activeEventNotice}
-            onDismissNotice={() => setActiveEventNotice('')}
-          />
-        )}
-
-        {/* QR WAYFINDING VIEW */}
-        {currentView === 'qr' && (
-          <QRWayfinding
-            nodes={nodes}
-            onSetStartWaypoint={(id) => {
-              setStartNodeId(id);
-              setCurrentView('map');
-            }}
-            onNavigateToBlock34={(startId) => {
-              setStartNodeId(startId);
-              setDestinationNodeId('block-34');
-              setCurrentView('map');
-            }}
-          />
-        )}
-
-        {/* USABILITY TESTING LAB VIEW */}
-        {currentView === 'usability' && (
-          <UsabilityTestLab
-            nodes={nodes}
-            onSelectRouteForTest={(startId, destId) => {
-              setStartNodeId(startId);
-              setDestinationNodeId(destId);
-              setCurrentView('map');
-            }}
-          />
-        )}
-
-        {/* RESEARCH & EMPATHY VIEW */}
-        {currentView === 'research' && (
-          <ResearchEmpathy />
-        )}
-
-        {/* ACADEMIC PROJECT REPORT VIEW */}
-        {currentView === 'report' && (
-          <ProjectReport />
-        )}
-
-        {/* PRESENTATION PITCH DECK VIEW */}
-        {currentView === 'presentation' && (
-          <ProjectPresentation
-            onSwitchToMap={() => setCurrentView('map')}
-          />
-        )}
-
-        {/* ADMIN / DATA MANAGEMENT VIEW */}
-        {currentView === 'admin' && (
-          <AdminManager
-            nodes={nodes}
-            edges={edges}
-            rooms={rooms}
-            onSaveNodes={setNodes}
-            onSaveEdges={setEdges}
-            onSaveRooms={setRooms}
-            onResetToDefault={handleResetToDefault}
-          />
-        )}
       </main>
+
+      {/* Shared Footer (Hidden on /map to give 100% full-screen map experience) */}
+      {location.pathname !== '/map' && (
+        <Footer
+          onOpenHelp={() => setShowHelpModal(true)}
+          onSelectModule={(moduleId) => setActiveAcademicModule(moduleId)}
+        />
+      )}
 
       {/* Last-50-Metre Final Approach Modal */}
       {showLast50mModal && (
         <Last50mGuidance
-          destinationNode={destinationNode}
-          selectedRoom={selectedRoom}
+          destinationNode={defaultHeroNode}
+          selectedRoom={defaultSeminarRoom}
           onClose={() => setShowLast50mModal(false)}
           onCompleteArrival={(arrivalDetails) => {
             console.log("Arrival confirmed:", arrivalDetails);
@@ -465,10 +378,11 @@ export default function App() {
         nodes={nodes}
         rooms={rooms}
         onSelectFavorite={(item) => {
+          setShowFavoritesModal(false);
           if (item.type === 'room') {
-            handleSelectRoom(item.roomObj);
+            navigate(`/map?dest=${item.nodeId}&room=${item.roomObj.id}`);
           } else {
-            handleSelectDestination(item.nodeId);
+            navigate(`/map?dest=${item.nodeId}`);
           }
         }}
         onRemoveFavorite={handleToggleFavorite}
@@ -479,112 +393,14 @@ export default function App() {
         isOpen={showHelpModal}
         onClose={() => setShowHelpModal(false)}
         onSelectStartGate={(gateId) => {
-          setStartNodeId(gateId);
-          setCurrentView('map');
+          setShowHelpModal(false);
+          navigate(`/map?start=${gateId}`);
         }}
         onSelectDestination={(destId) => {
-          setDestinationNodeId(destId);
-          setCurrentView('map');
+          setShowHelpModal(false);
+          navigate(`/map?dest=${destId}`);
         }}
       />
-
-      {/* Universal Footer */}
-      <footer className="no-print bg-navy-950 text-slate-400 border-t border-navy-800 text-xs py-10 px-4 transition-colors">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Brand Info */}
-          <div className="space-y-3 md:col-span-2">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-orange-600 text-white font-black text-base flex items-center justify-center">
-                34
-              </div>
-              <div>
-                <h4 className="font-extrabold text-sm text-white">
-                  P10 – Which Block Is 34? | Campus Wayfinding
-                </h4>
-                <p className="text-[11px] text-slate-400">
-                  Lovely Professional University • B.Tech Capstone Project 2026
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-md">
-              A modern, accessible pedestrian wayfinding system solving campus transit friction through Dijkstra shortest-path calculations, covered corridor options, QR waypoints, and last-50m indoor navigation.
-            </p>
-          </div>
-
-          {/* Quick Navigation Links */}
-          <div className="space-y-2">
-            <h5 className="font-extrabold text-xs text-white uppercase tracking-wider">
-              Application Modules
-            </h5>
-            <ul className="space-y-1.5 text-xs text-slate-400">
-              <li>
-                <button onClick={() => setCurrentView('map')} className="hover:text-orange-400 transition-colors">
-                  🗺️ Interactive Campus Map
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('events')} className="hover:text-orange-400 transition-colors">
-                  ⚡ Events & Exam Mode
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('qr')} className="hover:text-orange-400 transition-colors">
-                  📱 QR Wayfinding Signs
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('usability')} className="hover:text-orange-400 transition-colors">
-                  🧪 Usability Testing Lab
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setShowHelpModal(true)} className="hover:text-orange-400 transition-colors">
-                  ❓ Visitor Help & Gate Guide
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* Academic Project Credits */}
-          <div className="space-y-2">
-            <h5 className="font-extrabold text-xs text-white uppercase tracking-wider">
-              Academic Documentation
-            </h5>
-            <ul className="space-y-1.5 text-xs text-slate-400">
-              <li>
-                <button onClick={() => setCurrentView('report')} className="hover:text-orange-400 transition-colors">
-                  📄 Formal College Project Report
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('presentation')} className="hover:text-orange-400 transition-colors">
-                  📊 Evaluator Pitch Deck (13 Slides)
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('research')} className="hover:text-orange-400 transition-colors">
-                  🔬 Design Thinking & HMW Research
-                </button>
-              </li>
-              <li>
-                <button onClick={() => setCurrentView('admin')} className="hover:text-orange-400 transition-colors">
-                  ⚙️ Admin Data Manager & JSON Importer
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        {/* Bottom Disclaimer */}
-        <div className="max-w-7xl mx-auto pt-6 border-t border-navy-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-          <div>
-            © 2026 P10 Student Project Team • School of Computer Science & Engineering, LPU
-          </div>
-          <div className="text-amber-400 text-center sm:text-right font-medium">
-            ⚠️ Simulated Demonstration Data: All coordinates, pathways & rooms are illustrative models.
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

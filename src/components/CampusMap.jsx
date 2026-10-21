@@ -1,13 +1,44 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
 import { 
   ZoomIn, 
   ZoomOut, 
   RotateCcw, 
   Compass, 
-  MapPin, 
+  Layers, 
   Navigation, 
+  MapPin, 
+  Sparkles,
+  Info,
   X
 } from 'lucide-react';
+
+// Tile provider configurations
+const TILE_LAYERS = {
+  positron: {
+    name: 'Clean Light',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  },
+  osm: {
+    name: 'OpenStreetMap',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+  satellite: {
+    name: 'Satellite View',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 18,
+  },
+};
+
+// Verified LPU Main Campus center
+const LPU_CAMPUS_CENTER = [31.25492, 75.70462];
+const DEFAULT_ZOOM = 16;
 
 export default function CampusMap({
   nodes = [],
@@ -15,583 +46,500 @@ export default function CampusMap({
   startNodeId,
   destinationNodeId,
   activeRoute = null,
+  geoRouteCoordinates = null,
   onSelectNode,
   onSetStart,
   onSetDestination,
-  selectedRoom = null
+  selectedRoom = null,
 }) {
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [activeNodeDetail, setActiveNodeDetail] = useState(null);
-  const [filterCategory, setFilterCategory] = useState('all'); // 'all' | 'block' | 'gate' | 'landmark'
-  const svgRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const tileLayerRef = useRef(null);
+  const markersLayerRef = useRef(null);
+  const routeLayerRef = useRef(null);
+  const activePopupRef = useRef(null);
 
-  // Sync activeNodeDetail when start or destination changes
+  const [activeLayerKey, setActiveLayerKey] = useState('positron');
+  const [showLayerPicker, setShowLayerPicker] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
+
+  // Initialize Map
   useEffect(() => {
-    if (destinationNodeId) {
-      const dest = nodes.find(n => n.id === destinationNodeId);
-      if (dest) setActiveNodeDetail(dest);
+    if (!mapContainerRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    // Create Leaflet map instance
+    const map = L.map(mapContainerRef.current, {
+      center: LPU_CAMPUS_CENTER,
+      zoom: DEFAULT_ZOOM,
+      minZoom: 13,
+      maxZoom: 19,
+      zoomControl: false, // We render our own floating UI controls
+      attributionControl: false,
+    });
+
+    // Add Base Tile Layer
+    const layerConfig = TILE_LAYERS[activeLayerKey];
+    tileLayerRef.current = L.tileLayer(layerConfig.url, {
+      attribution: layerConfig.attribution,
+      subdomains: layerConfig.subdomains || 'abc',
+      maxZoom: layerConfig.maxZoom || 19,
+    }).addTo(map);
+
+    // Add Subtle Leaflet Attribution Control
+    L.control.attribution({
+      position: 'bottomright',
+      prefix: false,
+    }).addTo(map);
+
+    // Create layer groups for markers and routes
+    markersLayerRef.current = L.layerGroup().addTo(map);
+    routeLayerRef.current = L.layerGroup().addTo(map);
+
+    mapInstanceRef.current = map;
+
+    // Invalidate map size after animation frames
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update Tile Layer when user toggles style
+  useEffect(() => {
+    if (!mapInstanceRef.current || !tileLayerRef.current) return;
+    const layerConfig = TILE_LAYERS[activeLayerKey];
+    if (!layerConfig) return;
+
+    mapInstanceRef.current.removeLayer(tileLayerRef.current);
+    tileLayerRef.current = L.tileLayer(layerConfig.url, {
+      attribution: layerConfig.attribution,
+      subdomains: layerConfig.subdomains || 'abc',
+      maxZoom: layerConfig.maxZoom || 19,
+    }).addTo(mapInstanceRef.current);
+  }, [activeLayerKey]);
+
+  // Handle Zoom In / Zoom Out / Reset
+  const handleZoomIn = useCallback(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.zoomIn();
     }
-  }, [destinationNodeId, nodes]);
+  }, []);
 
-  // Zoom handlers
-  const handleZoomIn = () => setZoom(prev => Math.min(Number((prev + 0.25).toFixed(2)), 2.8));
-  const handleZoomOut = () => setZoom(prev => Math.max(Number((prev - 0.25).toFixed(2)), 0.65));
-  const handleReset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-
-  // Mouse pan handlers
-  const handleMouseDown = (e) => {
-    if (e.target.tagName === 'svg' || e.target.classList.contains('map-bg')) {
-      setIsDragging(true);
-      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  const handleZoomOut = useCallback(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.zoomOut();
     }
-  };
+  }, []);
 
-  const handleMouseMove = (e) => {
-    if (isDragging) {
-      setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
+  const handleResetView = useCallback(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo(LPU_CAMPUS_CENTER, DEFAULT_ZOOM, {
+        duration: 1.2,
+        easeLinearity: 0.25,
       });
     }
-  };
+  }, []);
 
-  const handleMouseUp = () => setIsDragging(false);
+  // Render Custom Campus Markers
+  useEffect(() => {
+    if (!mapInstanceRef.current || !markersLayerRef.current) return;
 
-  // Touch pan handlers for mobile
-  const handleTouchStart = (e) => {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      setIsDragging(true);
-      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
-    }
-  };
+    markersLayerRef.current.clearLayers();
 
-  const handleTouchMove = (e) => {
-    if (isDragging && e.touches.length === 1) {
-      const touch = e.touches[0];
-      setPan({
-        x: touch.clientX - dragStart.x,
-        y: touch.clientY - dragStart.y,
+    nodes.forEach((node) => {
+      if (!node.lat || !node.lng) return;
+
+      const isStart = node.id === startNodeId;
+      const isDestination = node.id === destinationNodeId;
+      const isHero = node.id === 'block-34' || node.isHeroBlock;
+
+      let iconHtml = '';
+      let iconSize = [36, 36];
+      let iconAnchor = [18, 18];
+
+      if (isDestination) {
+        // Prominent Destination Marker
+        iconHtml = `
+          <div class="relative flex items-center justify-center cursor-pointer group">
+            <span class="absolute -top-1 -right-1 flex h-4 w-4">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-4 w-4 bg-purple-600"></span>
+            </span>
+            <div class="px-2.5 py-1 bg-[#635BFF] text-white text-[11px] font-black rounded-full shadow-xl border-2 border-white flex items-center gap-1.5 transform hover:scale-110 transition-transform">
+              <span class="w-2 h-2 rounded-full bg-amber-300 animate-pulse"></span>
+              <span>DEST: ${node.code}</span>
+            </div>
+            <div class="w-2 h-2 bg-[#635BFF] rotate-45 -mt-1 mx-auto border-r border-b border-white"></div>
+          </div>
+        `;
+        iconSize = [90, 40];
+        iconAnchor = [45, 36];
+      } else if (isStart) {
+        // Start Marker
+        iconHtml = `
+          <div class="relative flex items-center justify-center cursor-pointer group">
+            <span class="absolute -top-1 -right-1 flex h-4 w-4">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-600"></span>
+            </span>
+            <div class="px-2.5 py-1 bg-emerald-600 text-white text-[11px] font-black rounded-full shadow-xl border-2 border-white flex items-center gap-1.5 transform hover:scale-110 transition-transform">
+              <span class="w-2 h-2 rounded-full bg-white"></span>
+              <span>START: ${node.code}</span>
+            </div>
+            <div class="w-2 h-2 bg-emerald-600 rotate-45 -mt-1 mx-auto border-r border-b border-white"></div>
+          </div>
+        `;
+        iconSize = [90, 40];
+        iconAnchor = [45, 36];
+      } else if (isHero) {
+        // Hero Block 34 Marker
+        iconHtml = `
+          <div class="relative flex flex-col items-center cursor-pointer group">
+            <div class="px-2.5 py-1 bg-gradient-to-r from-[#635BFF] to-[#8B5CF6] text-white text-xs font-black rounded-full shadow-lg border-2 border-white flex items-center gap-1.5 ring-2 ring-purple-300/60 transform hover:scale-110 transition-transform">
+              <span class="text-amber-300 text-[10px]">★</span>
+              <span>Block 34</span>
+            </div>
+            <div class="w-1.5 h-1.5 bg-[#635BFF] rotate-45 -mt-0.5 border-r border-b border-white"></div>
+          </div>
+        `;
+        iconSize = [85, 32];
+        iconAnchor = [42, 28];
+      } else if (node.category === 'gate') {
+        // Gate Marker
+        iconHtml = `
+          <div class="relative flex flex-col items-center cursor-pointer group">
+            <div class="px-2 py-0.5 bg-emerald-700 text-white text-[11px] font-bold rounded-full shadow-md border border-white flex items-center gap-1 hover:bg-emerald-800 transition-colors">
+              <span class="text-[9px] opacity-80">🚪</span>
+              <span>${node.code}</span>
+            </div>
+          </div>
+        `;
+        iconSize = [48, 26];
+        iconAnchor = [24, 13];
+      } else if (node.category === 'block') {
+        // Standard Academic Block
+        iconHtml = `
+          <div class="relative flex flex-col items-center cursor-pointer group">
+            <div class="px-2 py-0.5 bg-white text-[#635BFF] text-[11px] font-black rounded-full shadow-md border-2 border-[#635BFF] hover:bg-[#F3F0FF] hover:scale-105 transition-all">
+              <span>${node.code}</span>
+            </div>
+          </div>
+        `;
+        iconSize = [38, 26];
+        iconAnchor = [19, 13];
+      } else {
+        // Landmark / Amenity Marker
+        const isMall = node.id === 'block-25';
+        const isLib = node.id === 'block-28';
+        const isHosp = node.id === 'landmark-hospital';
+        const badgeBg = isMall ? 'bg-emerald-600' : isLib ? 'bg-sky-600' : isHosp ? 'bg-rose-600' : 'bg-slate-800';
+        const iconChar = isMall ? '🛍️' : isLib ? '📚' : isHosp ? '🏥' : '📍';
+
+        iconHtml = `
+          <div class="relative flex flex-col items-center cursor-pointer group">
+            <div class="px-2 py-0.5 ${badgeBg} text-white text-[10px] font-bold rounded-full shadow-md border border-white flex items-center gap-1 hover:opacity-95 transition-all">
+              <span class="text-[9px]">${iconChar}</span>
+              <span class="max-w-[80px] truncate">${node.code}</span>
+            </div>
+          </div>
+        `;
+        iconSize = [60, 26];
+        iconAnchor = [30, 13];
+      }
+
+      const customIcon = L.divIcon({
+        className: 'campus-custom-marker',
+        html: iconHtml,
+        iconSize,
+        iconAnchor,
+        popupAnchor: [0, -iconAnchor[1] - 4],
       });
-    }
-  };
 
-  const handleTouchEnd = () => setIsDragging(false);
+      const marker = L.marker([node.lat, node.lng], {
+        icon: customIcon,
+        title: node.name,
+      });
 
-  // Node lookup map
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      // Interactive Popup
+      const popupContent = document.createElement('div');
+      popupContent.className = 'p-1 text-slate-900';
+      popupContent.innerHTML = `
+        <div class="space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="inline-block px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                ${node.category.toUpperCase()} • ${node.zone || 'Campus'}
+              </span>
+              <h4 class="font-bold text-xs text-slate-900 mt-1 leading-snug">${node.name}</h4>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-600 leading-relaxed line-clamp-2">${node.description || ''}</p>
+          <div class="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-100">
+            <button id="btn-start-${node.id}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold text-center transition-colors">
+              Set Start
+            </button>
+            <button id="btn-dest-${node.id}" class="px-2 py-1 bg-[#635BFF] hover:bg-[#5145E5] text-white rounded-lg text-[11px] font-semibold text-center transition-colors shadow-xs">
+              Directions
+            </button>
+          </div>
+        </div>
+      `;
 
-  // Check if edge is in route
-  const isEdgeInRoute = (sourceId, targetId) => {
-    if (!activeRoute || !activeRoute.path || activeRoute.path.length < 2) return false;
-    for (let i = 0; i < activeRoute.path.length - 1; i++) {
-      const u = activeRoute.path[i];
-      const v = activeRoute.path[i + 1];
-      if ((u === sourceId && v === targetId) || (u === targetId && v === sourceId)) {
-        return true;
+      // Attach button click listeners inside popup
+      marker.bindPopup(popupContent, {
+        maxWidth: 240,
+        className: 'campus-leaflet-popup',
+      });
+
+      marker.on('popupopen', () => {
+        const btnStart = document.getElementById(`btn-start-${node.id}`);
+        const btnDest = document.getElementById(`btn-dest-${node.id}`);
+        if (btnStart) {
+          btnStart.onclick = (e) => {
+            e.stopPropagation();
+            if (onSetStart) onSetStart(node.id);
+            marker.closePopup();
+          };
+        }
+        if (btnDest) {
+          btnDest.onclick = (e) => {
+            e.stopPropagation();
+            if (onSetDestination) onSetDestination(node.id);
+            marker.closePopup();
+          };
+        }
+      });
+
+      marker.on('click', () => {
+        if (onSelectNode) onSelectNode(node);
+      });
+
+      marker.addTo(markersLayerRef.current);
+    });
+  }, [nodes, startNodeId, destinationNodeId, onSelectNode, onSetStart, onSetDestination]);
+
+  // Render Walking Route Polyline
+  useEffect(() => {
+    if (!mapInstanceRef.current || !routeLayerRef.current) return;
+
+    routeLayerRef.current.clearLayers();
+
+    // Determine coordinate polyline to draw:
+    // 1. Direct geoRouteCoordinates from OSRM pedestrian routing
+    // 2. Or fallback to Dijkstra campus path node coordinates
+    let polylineCoords = null;
+
+    if (geoRouteCoordinates && geoRouteCoordinates.length > 1) {
+      polylineCoords = geoRouteCoordinates;
+    } else if (activeRoute && activeRoute.path && activeRoute.path.length > 1) {
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const coords = [];
+      for (const nodeId of activeRoute.path) {
+        const n = nodeMap.get(nodeId);
+        if (n && n.lat && n.lng) {
+          coords.push([n.lat, n.lng]);
+        }
+      }
+      if (coords.length > 1) {
+        polylineCoords = coords;
       }
     }
-    return false;
-  };
 
-  // SVG dimensions
-  const mapWidth = 1000;
-  const mapHeight = 620;
+    if (polylineCoords && polylineCoords.length > 1) {
+      // Background glow polyline
+      const glowLine = L.polyline(polylineCoords, {
+        color: '#c4b5fd',
+        weight: 9,
+        opacity: 0.5,
+        lineCap: 'round',
+        lineJoin: 'round',
+      });
 
-  const filteredNodes = filterCategory === 'all' 
-    ? nodes 
-    : nodes.filter(n => n.category === filterCategory);
+      // Main primary walking polyline
+      const routeLine = L.polyline(polylineCoords, {
+        color: '#635BFF',
+        weight: 4.5,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round',
+        dashArray: '8, 6',
+      });
+
+      glowLine.addTo(routeLayerRef.current);
+      routeLine.addTo(routeLayerRef.current);
+
+      // Fit map viewport smoothly to show entire route with comfortable padding
+      try {
+        const bounds = routeLine.getBounds();
+        mapInstanceRef.current.fitBounds(bounds, {
+          padding: [80, 80],
+          maxZoom: 17,
+        });
+      } catch (e) {
+        // Ignore bounds error if collapsed
+      }
+    }
+  }, [geoRouteCoordinates, activeRoute, nodes]);
+
+  // Fly to destination when changed
+  useEffect(() => {
+    if (!destinationNodeId || !mapInstanceRef.current) return;
+    const dest = nodes.find(n => n.id === destinationNodeId);
+    if (dest && dest.lat && dest.lng && !activeRoute) {
+      mapInstanceRef.current.flyTo([dest.lat, dest.lng], 17, {
+        duration: 1.0,
+      });
+    }
+  }, [destinationNodeId, nodes, activeRoute]);
 
   return (
-    <div className="relative w-full bg-slate-950 rounded-3xl shadow-2xl overflow-hidden border border-slate-800 select-none">
-      {/* Top Map Bar */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl text-xs text-slate-300 pointer-events-auto">
+    <div className="relative w-full h-full select-none overflow-hidden bg-slate-100">
+      
+      {/* Real Leaflet Interactive Geographic Canvas */}
+      <div 
+        ref={mapContainerRef} 
+        id="campus-geographic-map" 
+        className="w-full h-full z-0 cursor-grab active:cursor-grabbing focus:outline-none"
+        style={{ minHeight: '100%' }}
+      />
+
+      {/* FLOATING TOP-RIGHT CONTROLS (Google Maps / QuickVet Style) */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 pointer-events-auto">
+        
+        {/* Layer Switcher & Compass Row */}
         <div className="flex items-center gap-2">
-          <span className="flex h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></span>
-          <span className="font-extrabold text-white tracking-wide">Interactive Campus Map</span>
-          <span className="hidden sm:inline text-slate-500">•</span>
-          <span className="hidden sm:inline text-amber-400 font-semibold text-[11px]">
-            Illustrative Schematic Model
-          </span>
-        </div>
+          
+          {/* Compass / Recenter Indicator */}
+          <button
+            onClick={handleResetView}
+            className="w-10 h-10 bg-white/95 backdrop-blur-xl border border-[#E8EAF2] rounded-2xl shadow-lg hover:shadow-xl text-[#64748B] hover:text-[#635BFF] flex items-center justify-center transition-all group"
+            title="Reset Campus View (Lovely Professional University)"
+            aria-label="Reset campus view"
+          >
+            <Compass className="w-5 h-5 group-hover:rotate-45 transition-transform text-[#635BFF]" />
+          </button>
 
-        {/* Category Filter Pills on Map */}
-        <div className="flex items-center gap-1">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'block', label: 'Blocks' },
-            { id: 'gate', label: 'Gates' },
-            { id: 'landmark', label: 'Landmarks' }
-          ].map(f => (
+          {/* Map Layer Mode Toggle Button */}
+          <div className="relative">
             <button
-              key={f.id}
-              onClick={() => setFilterCategory(f.id)}
-              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                filterCategory === f.id
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-slate-800/80 text-slate-400 hover:text-white'
-              }`}
+              onClick={() => setShowLayerPicker(!showLayerPicker)}
+              className="w-10 h-10 bg-white/95 backdrop-blur-xl border border-[#E8EAF2] rounded-2xl shadow-lg hover:shadow-xl text-[#64748B] hover:text-[#635BFF] flex items-center justify-center transition-all"
+              title="Change Map Tiles Layer"
+              aria-label="Change map tiles"
             >
-              {f.label}
+              <Layers className="w-5 h-5 text-[#635BFF]" />
             </button>
-          ))}
-        </div>
-      </div>
 
-      {/* Floating Map Controls (Right Top) */}
-      <div className="absolute right-4 top-16 z-20 flex flex-col gap-1.5 bg-slate-900/95 backdrop-blur border border-slate-700 p-1.5 rounded-2xl shadow-xl">
-        <button
-          onClick={handleZoomIn}
-          title="Zoom In (+)"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        <span className="text-[9px] font-mono font-bold text-center text-slate-400">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button
-          onClick={handleZoomOut}
-          title="Zoom Out (-)"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        <button
-          onClick={handleReset}
-          title="Reset View (1:1)"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors border-t border-slate-700/80"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Compass Rose Indicator (Left Bottom) */}
-      <div className="absolute left-4 bottom-4 z-20 flex items-center gap-2 bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-xl border border-slate-700 text-slate-400 text-xs pointer-events-none">
-        <Compass className="w-4 h-4 text-orange-400 animate-spin-slow" />
-        <span className="font-extrabold text-white text-[11px]">N ↑</span>
-        <span className="text-[10px] text-slate-400 hidden sm:inline">Schematic Grid</span>
-      </div>
-
-      {/* Map Legend (Right Bottom) */}
-      <div className="absolute right-4 bottom-4 z-20 hidden md:flex items-center gap-3 bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-xl border border-slate-700 text-xs text-slate-300 pointer-events-none">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white"></span>
-          <span>Gates</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded bg-orange-500 border border-white"></span>
-          <span>Block 34 (Hero)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded bg-slate-800 border border-sky-400"></span>
-          <span>Academic Blocks</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-4 h-1 bg-orange-400 rounded"></span>
-          <span>Active Route</span>
-        </div>
-      </div>
-
-      {/* SVG Canvas */}
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${mapWidth} ${mapHeight}`}
-        className="w-full h-[520px] md:h-[620px] cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <defs>
-          {/* Subtle Grid pattern */}
-          <pattern id="campusGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" strokeWidth="0.8" opacity="0.6" />
-          </pattern>
-          {/* Route Gradient */}
-          <linearGradient id="routeGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f97316" />
-            <stop offset="100%" stopColor="#fbbf24" />
-          </linearGradient>
-          {/* Filter for glowing active pin */}
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3.5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-
-        {/* Pan and Zoom Layer */}
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* Background Grid & Campus Boundary */}
-          <rect width={mapWidth} height={mapHeight} fill="#090f1f" className="map-bg" />
-          <rect width={mapWidth} height={mapHeight} fill="url(#campusGrid)" className="map-bg" />
-
-          {/* Landscaped Green Lawns & Courtyards */}
-          <g opacity="0.9">
-            {/* Central Academic Courtyard Lawn */}
-            <rect x="330" y="240" width="430" height="130" rx="20" fill="#062e24" stroke="#0d523f" strokeWidth="1.5" />
-            <text x="545" y="275" fill="#10b981" fontSize="11" opacity="0.5" textAnchor="middle" fontWeight="bold" letterSpacing="3">
-              CENTRAL ACADEMIC SPINE
-            </text>
-
-            {/* Unipolis Open Plaza Lawn */}
-            <circle cx="480" cy="110" r="64" fill="#1e1b4b" stroke="#3730a3" strokeWidth="1.5" strokeDasharray="5 5" />
-            
-            {/* Library Lawn */}
-            <rect x="420" y="410" width="120" height="70" rx="14" fill="#0f172a" stroke="#1e293b" strokeWidth="1.5" />
-
-            {/* Sports Grounds Area */}
-            <rect x="800" y="80" width="130" height="190" rx="18" fill="#064e3b" stroke="#059669" strokeWidth="1.5" opacity="0.6" />
-            <text x="865" y="105" fill="#34d399" fontSize="10" opacity="0.7" textAnchor="middle" fontWeight="bold">
-              SPORTS ARENA
-            </text>
-
-            {/* GT Road Southern Border Highway */}
-            <rect x="0" y="580" width={mapWidth} height="40" fill="#020617" />
-            <line x1="0" y1="600" x2={mapWidth} y2="600" stroke="#facc15" strokeWidth="2.5" strokeDasharray="18 12" />
-            <text x="500" y="595" fill="#9ca3af" fontSize="10" textAnchor="middle" letterSpacing="4" fontWeight="bold">
-              NATIONAL HIGHWAY 1 (GT ROAD - MAIN CAMPUS FRONTAGE)
-            </text>
-          </g>
-
-          {/* Campus Walkways & Roads (Inactive Background Edges) */}
-          <g>
-            {edges.map((edge, idx) => {
-              const src = nodeMap.get(edge.source);
-              const tgt = nodeMap.get(edge.target);
-              if (!src || !tgt) return null;
-
-              const inRoute = isEdgeInRoute(edge.source, edge.target);
-              if (inRoute) return null; // Active route rendered separately on top
-
-              return (
-                <g key={`edge-${idx}`}>
-                  <line
-                    x1={src.x}
-                    y1={src.y}
-                    x2={tgt.x}
-                    y2={tgt.y}
-                    stroke={edge.type === 'boulevard' ? '#334155' : '#1e293b'}
-                    strokeWidth={edge.type === 'boulevard' ? 6 : 3.5}
-                    strokeDasharray={edge.type === 'covered' ? '4 3' : 'none'}
-                    strokeLinecap="round"
-                    opacity="0.85"
-                  />
-                </g>
-              );
-            })}
-          </g>
-
-          {/* Active Shortest-Path Route (Dijkstra Result) */}
-          {activeRoute && activeRoute.path && activeRoute.path.length > 1 && (
-            <g>
-              {/* Outer Glow Halo */}
-              {activeRoute.path.map((nodeId, idx) => {
-                if (idx === activeRoute.path.length - 1) return null;
-                const nextId = activeRoute.path[idx + 1];
-                const src = nodeMap.get(nodeId);
-                const tgt = nodeMap.get(nextId);
-                if (!src || !tgt) return null;
-
-                return (
-                  <line
-                    key={`glow-${idx}`}
-                    x1={src.x}
-                    y1={src.y}
-                    x2={tgt.x}
-                    y2={tgt.y}
-                    stroke="#ea580c"
-                    strokeWidth="14"
-                    strokeLinecap="round"
-                    opacity="0.4"
-                    filter="url(#glow)"
-                  />
-                );
-              })}
-
-              {/* Animated Walking Route Line */}
-              {activeRoute.path.map((nodeId, idx) => {
-                if (idx === activeRoute.path.length - 1) return null;
-                const nextId = activeRoute.path[idx + 1];
-                const src = nodeMap.get(nodeId);
-                const tgt = nodeMap.get(nextId);
-                if (!src || !tgt) return null;
-
-                return (
-                  <line
-                    key={`active-${idx}`}
-                    x1={src.x}
-                    y1={src.y}
-                    x2={tgt.x}
-                    y2={tgt.y}
-                    stroke="url(#routeGlow)"
-                    strokeWidth="5.5"
-                    strokeLinecap="round"
-                    className="route-dash"
-                  />
-                );
-              })}
-            </g>
-          )}
-
-          {/* Campus Nodes (Gates, Blocks, Landmarks) */}
-          <g>
-            {filteredNodes.map((node) => {
-              const isStart = node.id === startNodeId;
-              const isDest = node.id === destinationNodeId;
-              const isHero = node.isHeroBlock;
-              const isSelected = activeNodeDetail?.id === node.id;
-              const isInActiveRoute = activeRoute?.path?.includes(node.id);
-
-              return (
-                <g
-                  key={node.id}
-                  transform={`translate(${node.x}, ${node.y})`}
-                  className="cursor-pointer transition-transform duration-150"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveNodeDetail(node);
-                    if (onSelectNode) onSelectNode(node);
-                  }}
-                >
-                  {/* HERO BLOCK 34 SPECIAL ACCENT HALO */}
-                  {isHero && (
-                    <circle
-                      r="38"
-                      fill="#ea580c"
-                      opacity={isDest ? 0.4 : 0.2}
-                      className="animate-pulse"
-                    />
-                  )}
-
-                  {/* SELECTION RING IF CLICKED */}
-                  {isSelected && (
-                    <circle
-                      r="32"
-                      fill="none"
-                      stroke="#38bdf8"
-                      strokeWidth="2.5"
-                      strokeDasharray="4 3"
-                      className="animate-spin-slow"
-                    />
-                  )}
-
-                  {/* GATE NODES */}
-                  {node.category === 'gate' && (
-                    <g>
-                      <circle
-                        r={isStart ? 24 : 20}
-                        fill={isStart ? '#10b981' : '#065f46'}
-                        stroke={isStart ? '#ffffff' : '#34d399'}
-                        strokeWidth={isStart ? 3.5 : 2}
-                        filter={isStart ? 'url(#glow)' : 'none'}
-                      />
-                      <text
-                        textAnchor="middle"
-                        y="4"
-                        fill="#ffffff"
-                        fontSize="11"
-                        fontWeight="bold"
-                      >
-                        {node.code}
-                      </text>
-                      <text
-                        textAnchor="middle"
-                        y={isStart ? 35 : 31}
-                        fill="#a7f3d0"
-                        fontSize="9.5"
-                        fontWeight="700"
-                      >
-                        {node.name.split(' (')[0]}
-                      </text>
-                    </g>
-                  )}
-
-                  {/* ACADEMIC BLOCK NODES */}
-                  {node.category === 'block' && (
-                    <g>
-                      <rect
-                        x="-24"
-                        y="-18"
-                        width="48"
-                        height="36"
-                        rx="9"
-                        fill={
-                          isDest
-                            ? '#ea580c'
-                            : isStart
-                            ? '#10b981'
-                            : isHero
-                            ? '#9a3412'
-                            : isInActiveRoute
-                            ? '#1e3a8a'
-                            : '#1e293b'
-                        }
-                        stroke={
-                          isDest
-                            ? '#fed7aa'
-                            : isHero
-                            ? '#f97316'
-                            : isSelected
-                            ? '#38bdf8'
-                            : '#475569'
-                        }
-                        strokeWidth={isDest || isHero || isSelected ? 3 : 1.5}
-                        filter={isDest || isHero ? 'url(#glow)' : 'none'}
-                      />
-                      <text
-                        textAnchor="middle"
-                        y="5"
-                        fill="#ffffff"
-                        fontSize={isHero ? "14" : "12"}
-                        fontWeight="bold"
-                      >
-                        {node.code}
-                      </text>
-                      <text
-                        textAnchor="middle"
-                        y="29"
-                        fill={isHero ? "#fb923c" : "#94a3b8"}
-                        fontSize="9.5"
-                        fontWeight={isHero ? "bold" : "600"}
-                      >
-                        Blk {node.code}
-                      </text>
-                    </g>
-                  )}
-
-                  {/* LANDMARK NODES */}
-                  {node.category === 'landmark' && (
-                    <g>
-                      <polygon
-                        points="-18,-14 18,-14 24,0 18,14 -18,14 -24,0"
-                        fill={
-                          isDest
-                            ? '#ea580c'
-                            : isStart
-                            ? '#10b981'
-                            : '#312e81'
-                        }
-                        stroke={isSelected ? '#38bdf8' : '#6366f1'}
-                        strokeWidth={isSelected ? 3 : 2}
-                      />
-                      <text
-                        textAnchor="middle"
-                        y="4"
-                        fill="#ffffff"
-                        fontSize="9"
-                        fontWeight="bold"
-                      >
-                        {node.code.length > 5 ? node.code.slice(0, 4) : node.code}
-                      </text>
-                      <text
-                        textAnchor="middle"
-                        y="27"
-                        fill="#c7d2fe"
-                        fontSize="9"
-                        fontWeight="600"
-                      >
-                        {node.name.split(' ')[0]}
-                      </text>
-                    </g>
-                  )}
-
-                  {/* START PIN BADGE */}
-                  {isStart && (
-                    <g transform="translate(0, -32)" className="pin-glow">
-                      <rect x="-30" y="-12" width="60" height="20" rx="10" fill="#10b981" stroke="#ffffff" strokeWidth="1.5" />
-                      <text x="0" y="2" textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="bold">
-                        START (A)
-                      </text>
-                      <polygon points="-4,8 4,8 0,13" fill="#10b981" />
-                    </g>
-                  )}
-
-                  {/* DESTINATION PIN BADGE */}
-                  {isDest && (
-                    <g transform="translate(0, -34)" className="pin-glow">
-                      <rect x="-34" y="-12" width="68" height="20" rx="10" fill="#ea580c" stroke="#ffffff" strokeWidth="1.5" />
-                      <text x="0" y="2" textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="bold">
-                        DEST (B) 📍
-                      </text>
-                      <polygon points="-4,8 4,8 0,13" fill="#ea580c" />
-                    </g>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </g>
-      </svg>
-
-      {/* Persistent Selected Node Drawer / Card */}
-      {activeNodeDetail && (
-        <div className="absolute left-4 bottom-14 md:bottom-auto md:top-16 z-30 max-w-sm w-[calc(100%-2rem)] md:w-80 bg-slate-900/95 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl text-white animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <span className="inline-block px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 mb-1">
-                {activeNodeDetail.category.toUpperCase()} • {activeNodeDetail.zone}
-              </span>
-              <h4 className="font-extrabold text-sm sm:text-base text-white leading-tight">
-                {activeNodeDetail.name}
-              </h4>
-            </div>
-            <button
-              onClick={() => setActiveNodeDetail(null)}
-              className="p-1 text-slate-400 hover:text-white rounded-lg transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-            {activeNodeDetail.description}
-          </p>
-
-          {activeNodeDetail.popularDestinations && activeNodeDetail.popularDestinations.length > 0 && (
-            <div className="mt-2.5 pt-2 border-t border-slate-800">
-              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
-                Popular Rooms in this Block:
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {activeNodeDetail.popularDestinations.map((roomName, i) => (
-                  <span key={i} className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md font-medium">
-                    {roomName}
-                  </span>
+            {/* Layer Selection Dropdown */}
+            {showLayerPicker && (
+              <div className="absolute right-0 top-12 w-48 bg-white/95 backdrop-blur-2xl border border-[#E8EAF2] rounded-2xl shadow-2xl p-2 space-y-1 animate-fadeIn">
+                <div className="px-2 py-1 text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
+                  Map Style
+                </div>
+                {Object.entries(TILE_LAYERS).map(([key, layer]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setActiveLayerKey(key);
+                      setShowLayerPicker(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors ${
+                      activeLayerKey === key
+                        ? 'bg-[#F3F0FF] text-[#635BFF]'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{layer.name}</span>
+                    {activeLayerKey === key && (
+                      <span className="w-2 h-2 rounded-full bg-[#635BFF]"></span>
+                    )}
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Action Buttons: Set as Start & Navigate */}
-          <div className="mt-3.5 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                if (onSetStart) onSetStart(activeNodeDetail.id);
-              }}
-              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow"
-            >
-              <MapPin className="w-3.5 h-3.5" /> Set Start
-            </button>
-            <button
-              onClick={() => {
-                if (onSetDestination) onSetDestination(activeNodeDetail.id);
-              }}
-              className="px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow"
-            >
-              <Navigation className="w-3.5 h-3.5" /> Navigate
-            </button>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Zoom Controls */}
+        <div className="flex flex-col bg-white/95 backdrop-blur-xl border border-[#E8EAF2] rounded-2xl shadow-lg overflow-hidden">
+          <button
+            onClick={handleZoomIn}
+            className="w-10 h-10 flex items-center justify-center text-[#64748B] hover:text-[#635BFF] hover:bg-slate-50 transition-colors border-b border-[#E8EAF2]"
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            className="w-10 h-10 flex items-center justify-center text-[#64748B] hover:text-[#635BFF] hover:bg-slate-50 transition-colors"
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Legend Drawer Toggle */}
+        <button
+          onClick={() => setShowLegend(!showLegend)}
+          className="px-3 py-1.5 bg-white/95 backdrop-blur-xl border border-[#E8EAF2] rounded-xl shadow-md hover:shadow-lg text-[11px] font-bold text-slate-700 hover:text-[#635BFF] flex items-center gap-1.5 transition-all"
+        >
+          <Info className="w-3.5 h-3.5 text-[#635BFF]" />
+          <span>{showLegend ? 'Hide Legend' : 'Map Legend'}</span>
+        </button>
+
+        {/* Campus Map Legend Pill */}
+        {showLegend && (
+          <div className="bg-white/95 backdrop-blur-2xl border border-[#E8EAF2] rounded-2xl shadow-xl p-3 w-56 text-xs text-slate-700 space-y-2 animate-fadeIn">
+            <div className="flex items-center justify-between font-bold text-[11px] text-slate-900 border-b border-slate-100 pb-1.5">
+              <span>Campus Legend</span>
+              <button onClick={() => setShowLegend(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-gradient-to-r from-[#635BFF] to-[#8B5CF6] text-white flex items-center justify-center text-[8px] font-black">34</span>
+                <span>Block 34 (School of CSE)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full border-2 border-[#635BFF] bg-white text-[#635BFF] flex items-center justify-center text-[8px] font-bold">32</span>
+                <span>Academic Blocks</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[8px]">🚪</span>
+                <span>Campus Gates (G1 - G4)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px]">🛍️</span>
+                <span>UniMall & Amenities</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-1 bg-[#635BFF] rounded-full"></div>
+                <span>Pedestrian Walking Route</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* FLOATING CAMPUS LOCATION BADGE (Bottom Left - Above Attribution) */}
+      <div className="absolute bottom-4 left-4 z-10 hidden md:flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-md border border-[#E8EAF2] rounded-xl shadow-md text-xs text-slate-700 pointer-events-none">
+        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span className="font-semibold text-[#0F172A]">Lovely Professional University</span>
+        <span className="text-[#94A3B8]">·</span>
+        <span className="text-slate-500 text-[11px]">Phagwara, Punjab (31.25°N, 75.70°E)</span>
+      </div>
+
     </div>
   );
 }
