@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #ffffff;
+    --text-primary: #0f172a;
+    --accent-orange: #f97316;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased font-sans selection:bg-orange-100 selection:text-orange-900;
+    min-height: 100vh;
+  }
+}
+
+/* Accessibility: Large Text Mode */
+body.large-text {
+  font-size: 1.15rem;
+}
+body.large-text h1 {
+  font-size: 2.5rem !important;
+}
+body.large-text h2 {
+  font-size: 2rem !important;
+}
+body.large-text h3 {
+  font-size: 1.6rem !important;
+}
+body.large-text p, 
+body.large-text span, 
+body.large-text button,
+body.large-text input,
+body.large-text select {
+  font-size: 1.15rem !important;
+  line-height: 1.6 !important;
+}
+
+/* Accessibility: High Contrast Mode */
+body.high-contrast {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+body.high-contrast * {
+  border-color: #facc15 !important;
+}
+body.high-contrast .bg-white,
+body.high-contrast .bg-slate-50,
+body.high-contrast .bg-slate-100,
+body.high-contrast .bg-navy-900,
+body.high-contrast .bg-slate-800,
+body.high-contrast .bg-slate-900 {
+  background-color: #09090b !important;
+  color: #ffffff !important;
+}
+body.high-contrast .text-slate-500,
+body.high-contrast .text-slate-600,
+body.high-contrast .text-slate-700,
+body.high-contrast .text-slate-400 {
+  color: #f4f4f5 !important;
+}
+body.high-contrast button {
+  border: 2px solid #facc15 !important;
+}
+body.high-contrast .badge,
+body.high-contrast .tag {
+  background-color: #facc15 !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* Animated Walking Route Path */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+.route-dash {
+  stroke-dasharray: 8 6;
+  animation: dash 1.2s linear infinite;
+}
+
+/* Pulse Glow for Pin */
+@keyframes pulse-pin {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.7;
+  }
+}
+
+.pin-glow {
+  animation: pulse-pin 2s ease-in-out infinite;
+}
+
+/* Slow Spin for Map Compass */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* Fade-in for panels / drawers */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Global Keyboard Focus Rings */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Styles for Project Report */
+@media print {
+  header, nav, .no-print, button, footer {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+}
