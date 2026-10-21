@@ -33,7 +33,8 @@ export async function fetchPedestrianRoute(startCoords, destCoords, options = {}
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const url = `https://router.project-osrm.org/route/v1/foot/${startCoords.lng},${startCoords.lat};${destCoords.lng},${destCoords.lat}?overview=full&geometries=geojson&steps=true`;
+  const baseUrl = import.meta.env.VITE_OSRM_FOOT_ROUTING_URL || 'https://router.project-osrm.org/route/v1/foot';
+  const url = `${baseUrl}/${startCoords.lng},${startCoords.lat};${destCoords.lng},${destCoords.lat}?overview=full&geometries=geojson&steps=true`;
 
   try {
     const response = await fetch(url, {
